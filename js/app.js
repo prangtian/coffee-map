@@ -118,6 +118,16 @@
     if (st.user.role === 'admin') return true;
     const p = st.plots.find(x => x.id === m.plot_id); return !!(p && p.owner_id === st.user.id);
   };
+  // ไลบรารีที่ใช้เฉพาะตอนแก้ไข โหลดเมื่อต้องใช้ ผู้ชมทั่วไปจึงไม่ต้องดาวน์โหลด
+  const LIBS = { exifr: 'vendor/exifr.umd.js', toGeoJSON: 'vendor/togeojson.umd.js', shp: 'vendor/shp.min.js' };
+  function need(name) {
+    if (window[name]) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const sc = document.createElement('script'); sc.src = LIBS[name];
+      sc.onload = res; sc.onerror = () => rej(new Error('โหลด ' + LIBS[name] + ' ไม่สำเร็จ'));
+      document.head.appendChild(sc);
+    });
+  }
   function maxTexture() {
     if (maxTexture.v) return maxTexture.v;
     try { const gl = document.createElement('canvas').getContext('webgl'); maxTexture.v = gl.getParameter(gl.MAX_TEXTURE_SIZE); }
@@ -264,14 +274,14 @@
       try {
         if (p.ortho_type === 'xyz') {
           const tileUrl = /^https?:/.test(p.ortho_url) ? p.ortho_url : location.href.split(/[?#]/)[0].replace(/[^/]*$/, '') + p.ortho_url.replace(/^\.?\//, '');
-          const src = { type: 'raster', tiles: [tileUrl], tileSize: 256, maxzoom: 22 };
+          const src = { type: 'raster', tiles: [tileUrl], tileSize: 256, minzoom: cfg.ORTHO_MIN_ZOOM || 14, maxzoom: cfg.ORTHO_MAX_ZOOM || 21 };
           const b = p.ortho_bounds || (p.boundary ? bboxOf(plotCoords(p)) : null); if (b) src.bounds = b;
           map.addSource(sid, src);
         } else {
           const b = p.ortho_bounds; if (!b) return;
           map.addSource(sid, { type: 'image', url: S.url(p.ortho_url), coordinates: [[b[0], b[3]], [b[2], b[3]], [b[2], b[1]], [b[0], b[1]]] });
         }
-        map.addLayer({ id: sid, type: 'raster', source: sid, minzoom: 12, paint: { 'raster-opacity': p._orthoOpacity != null ? p._orthoOpacity : 1 } }, 'plots-fill');
+        map.addLayer({ id: sid, type: 'raster', source: sid, minzoom: (cfg.ORTHO_MIN_ZOOM || 14) - 1, paint: { 'raster-opacity': p._orthoOpacity != null ? p._orthoOpacity : 1 } }, 'plots-fill');
       } catch (e) { console.warn('ortho', e); }
     });
   }
@@ -304,7 +314,7 @@
     if (on) {
       map.setTerrain({ source: window.TERRAIN_SOURCE, exaggeration: 1.4 });
       try { map.setSky({ 'sky-color': '#a9c9e8', 'horizon-color': '#e3ecef', 'fog-color': '#e3ecef', 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.7, 'fog-ground-blend': 0.5 }); } catch (e) {}
-      map.easeTo({ pitch: 62, bearing: map.getBearing() || -20, duration: 1400 });
+      map.easeTo({ pitch: 55, bearing: map.getBearing() || -20, duration: 1400 });
     } else {
       map.setTerrain(null);
       map.easeTo({ pitch: 0, bearing: 0, duration: 900 });
@@ -825,6 +835,7 @@
   async function readExif(file) {
     const r = {};
     try {
+      await need('exifr');
       const o = await exifr.parse(file, { gps: true, xmp: true, tiff: true, exif: true, mergeOutput: true });
       if (o) {
         if (typeof o.latitude === 'number' && typeof o.longitude === 'number') { r.lat = o.latitude; r.lon = o.longitude; }
@@ -958,8 +969,8 @@
   async function parseGeoFile(f) {
     const name = f.name.toLowerCase();
     let out;
-    if (name.endsWith('.kml')) out = toGeoJSON.kml(new DOMParser().parseFromString(await f.text(), 'text/xml'));
-    else if (name.endsWith('.zip')) { const r = await shp(await f.arrayBuffer()); out = Array.isArray(r) ? fc(r.flatMap(x => x.features)) : r; }
+    if (name.endsWith('.kml')) { await need('toGeoJSON'); out = toGeoJSON.kml(new DOMParser().parseFromString(await f.text(), 'text/xml')); }
+    else if (name.endsWith('.zip')) { await need('shp'); const r = await shp(await f.arrayBuffer()); out = Array.isArray(r) ? fc(r.flatMap(x => x.features)) : r; }
     else { const j = JSON.parse(await f.text()); out = j.type === 'FeatureCollection' ? j : (j.type === 'Feature' ? fc([j]) : fc([{ type: 'Feature', geometry: j, properties: {} }])); }
     // ตัดค่าความสูง (Z) ทิ้ง
     const strip = c => typeof c[0] === 'number' ? c.slice(0, 2) : c.map(strip);

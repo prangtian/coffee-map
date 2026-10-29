@@ -32,11 +32,12 @@
           tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
           attribution: 'ภาพดาวเทียม © Esri, Maxar, Earthstar Geographics'
         },
+        // maxzoom 12: ข้อมูลต้นทางละเอียด ~30 ม. ซูมลึกกว่านี้ไม่ได้รายละเอียดเพิ่ม แต่โหลดไฟล์มากขึ้นหลายเท่า
         dem: {
-          type: 'raster-dem', tiles: [TERRAIN], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
+          type: 'raster-dem', tiles: [TERRAIN], encoding: 'terrarium', tileSize: 256, maxzoom: 12,
           attribution: 'ภูมิประเทศ: AWS Terrain Tiles'
         },
-        demShade: { type: 'raster-dem', tiles: [TERRAIN], encoding: 'terrarium', tileSize: 256, maxzoom: 15 }
+        demShade: { type: 'raster-dem', tiles: [TERRAIN], encoding: 'terrarium', tileSize: 256, maxzoom: 12 }
       },
       layers: [
         { id: 'bg', type: 'background', paint: { 'background-color': C.ground } },
@@ -83,7 +84,8 @@
                    'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
                    'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
                    'fill-extrusion-opacity': 0.9 } },
-        { id: 'wood-3d', type: 'fill-extrusion', source: 'omt', 'source-layer': 'landcover',
+        // ป่ายกนูนเฉพาะซูมกลาง: ซูมไกลรูปป่าใหญ่มากจนกินเครื่อง ซูมใกล้จะบังภาพออร์โธ
+        { id: 'wood-3d', type: 'fill-extrusion', source: 'omt', 'source-layer': 'landcover', minzoom: 11, maxzoom: 15.5,
           filter: ['==', ['get', 'class'], 'wood'], layout: { visibility: 'none' },
           paint: { 'fill-extrusion-color': C.woodTop, 'fill-extrusion-height': 14, 'fill-extrusion-opacity': 0.85 } },
 
